@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>JSON → VLESS / Sing-box / Clash</title>
 
-  <!-- PWA -->
+  <!-- PWA (for GitHub Pages): keep these files next to index.html
+       - manifest.json
+       - sw.js
+       - icons/icon-192.png
+       - icons/icon-512.png
+  -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b1020">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -68,7 +73,8 @@
     .dot.warn{background:var(--warn)}
     .dot.bad{background:var(--bad)}
     .mut{color:var(--mut)}
-    #status{justify-content:flex-start}
+    #status{justify-content:flex-start; overflow:hidden;}
+    #statusText{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; width:100%;}
 
     .grid{
       display:grid;gap:12px;
@@ -188,12 +194,13 @@
       align-items:center;
       gap:10px;
     }
-    #qrcanvas, #qrimg{
+    #qrimg{
       width:280px;height:280px;
       border-radius:12px;
       background:#fff;
       padding:10px;
       display:block;
+      object-fit:contain;
     }
     .mini{
       font-size:11px;color:var(--mut);
@@ -245,8 +252,7 @@
           <button class="copyFull" data-copy="#vlessText">📋 Copy VLESS</button>
 
           <div class="qr">
-            <canvas id="qrcanvas" width="280" height="280"></canvas>
-            <img id="qrimg" alt="QR" style="display:none"/>
+            <img id="qrimg" alt="QR code"/>
             <div class="mini" id="qrMini"></div>
           </div>
         </div>
@@ -269,11 +275,13 @@
 
 <script>
 /* ---------- PWA: register service worker (sw.js) ---------- */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(()=>{});
-  });
-}
+try{
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(()=>{});
+    });
+  }
+}catch(_){}
 
 /* ---------- utils ---------- */
 const $ = (q, el=document) => el.querySelector(q);
@@ -281,7 +289,9 @@ const toArray = (x)=> Array.isArray(x) ? x : (x==null ? [] : [x]);
 const first = (a)=> Array.isArray(a) ? a[0] : undefined;
 
 function setStatus(type, msg){
-  $("#status").innerHTML = `<span class="dot ${type}"></span><span class="mut" id="statusText">${escapeHtml(msg)}</span>`;
+  const el = $("#status");
+  if(!el) return;
+  el.innerHTML = `<span class="dot ${type}"></span><span class="mut" id="statusText">${escapeHtml(msg)}</span>`;
 }
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
@@ -489,28 +499,23 @@ function buildClash(p){
   ].join("\n");
 }
 
-/* ---------- QR rendering (reliable online fallback) ---------- */
+/* ---------- QR (works for long strings) ---------- */
 function drawQR(text){
-  const canvas = $("#qrcanvas");
   const img = $("#qrimg");
-  const ctx = canvas.getContext("2d");
+  const mini = $("#qrMini");
+  if(!img || !mini) return;
 
-  // Reset
-  ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
-  img.style.display="none";
-  canvas.style.display="block";
-  $("#qrMini").textContent = "";
+  if(!text){
+    img.removeAttribute("src");
+    img.style.background = "#fff";
+    mini.textContent = "";
+    return;
+  }
 
-  if(!text) return;
-
-  const online = `https://api.qrserver.com/v1/create-qr-code/?size=520x520&data=${encodeURIComponent(text)}`;
-
-  // Always show online QR for correctness (especially long VLESS links)
-  canvas.style.display="none";
-  img.style.display="block";
-  img.src = online;
-
-  $("#qrMini").textContent = text.length>220 ? (text.slice(0,220)+"…") : text;
+  // Reliable remote QR generator (HTTPS, GitHub Pages friendly)
+  const url = "https://api.qrserver.com/v1/create-qr-code/?size=520x520&data=" + encodeURIComponent(text);
+  img.src = url;
+  mini.textContent = (text.length > 220) ? (text.slice(0,220) + "…") : text;
 }
 
 /* ---------- actions ---------- */
@@ -535,38 +540,44 @@ const sampleJSON = `{
 }`;
 
 function convert(){
-  const raw=$("#input").value.trim();
+  const input = $("#input");
+  if(!input) return;
+
+  const raw = input.value.trim();
   if(!raw){ setStatus("warn","Paste JSON and click Convert."); return; }
+
   let root;
-  try{ root=JSON.parse(raw); }
+  try{ root = JSON.parse(raw); }
   catch{ setStatus("bad","Invalid JSON."); return; }
 
   try{
-    const p=extractVlessProfile(root);
+    const p = extractVlessProfile(root);
 
-    const vless=buildVlessURI(p);
-    $("#vlessText").value=vless;
+    const vless = buildVlessURI(p);
+    $("#vlessText").value = vless;
     drawQR(vless);
 
-    $("#singText").value=buildSingBox(p);
-    $("#clashText").value=buildClash(p);
+    $("#singText").value = buildSingBox(p);
+    $("#clashText").value = buildClash(p);
 
     setStatus("ok", `Converted: ${p.server}:${p.port} (${p.network}/${p.security})`);
   }catch(e){
-    $("#vlessText").value="";
-    $("#singText").value="";
-    $("#clashText").value="";
+    $("#vlessText").value = "";
+    $("#singText").value = "";
+    $("#clashText").value = "";
     drawQR("");
     setStatus("bad", e?.message || "Conversion error.");
   }
 }
 
-$("#btnConvert").addEventListener("click", convert);
-$("#btnSample").addEventListener("click", ()=>{
-  $("#input").value=sampleJSON;
+function safeOn(el, ev, fn){ if(el) el.addEventListener(ev, fn); }
+
+safeOn($("#btnConvert"), "click", convert);
+safeOn($("#btnSample"), "click", ()=>{
+  $("#input").value = sampleJSON;
   setStatus("warn","Sample inserted. Click Convert.");
 });
-$("#btnClear").addEventListener("click", ()=>{
+safeOn($("#btnClear"), "click", ()=>{
   $("#input").value="";
   $("#vlessText").value="";
   $("#singText").value="";
@@ -576,13 +587,13 @@ $("#btnClear").addEventListener("click", ()=>{
 });
 
 document.addEventListener("click", async (e)=>{
-  const btn=e.target.closest("[data-copy]");
+  const btn = e.target.closest("[data-copy]");
   if(!btn) return;
-  const sel=btn.getAttribute("data-copy");
-  const el=$(sel);
-  const text=(el?.value||"").trim();
+  const sel = btn.getAttribute("data-copy");
+  const el = $(sel);
+  const text = (el?.value || "").trim();
   if(!text){ setStatus("warn","Nothing to copy."); return; }
-  const ok=await copyText(text);
+  const ok = await copyText(text);
   setStatus(ok?"ok":"bad", ok ? "Copied." : "Copy failed.");
 });
 
@@ -592,12 +603,13 @@ document.querySelectorAll(".tab").forEach(t=>{
     t.classList.add("active");
     const key=t.getAttribute("data-tab");
     document.querySelectorAll(".out").forEach(o=>o.classList.remove("active"));
-    $("#out-"+key).classList.add("active");
+    const target = $("#out-"+key);
+    if(target) target.classList.add("active");
   });
 });
 
 let typingTimer=null;
-$("#input").addEventListener("input", ()=>{
+safeOn($("#input"), "input", ()=>{
   if(typingTimer) clearTimeout(typingTimer);
   typingTimer=setTimeout(()=> setStatus("warn","Input changed. Click Convert."), 250);
 });
