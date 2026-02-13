@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>JSON → VLESS / Sing-box / Clash</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1020">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    :root{
+      --bg:#0b1020;
+      --card:rgba(255,255,255,.06);
+      --card2:rgba(255,255,255,.09);
+      --bd:rgba(255,255,255,.14);
+      --tx:#eaf0ff;
+      --mut:rgba(234,240,255,.65);
+      --ok:#2ee59d;
+      --warn:#ffcc66;
+      --bad:#ff5c7a;
+      --r:14px;
+      --shadow: 0 18px 60px rgba(0,0,0,.45);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color:var(--tx);
+      background:
+        radial-gradient(900px 520px at 80% -10%, rgba(99,102,241,.35), transparent 55%),
+        radial-gradient(700px 520px at 10% 0%, rgba(16,185,129,.28), transparent 55%),
+        linear-gradient(180deg, #070a16 0%, var(--bg) 70%, #070a16 100%);
+      padding:18px;
+      min-height:100vh;
+    }
+    .wrap{max-width:1100px;margin:0 auto;}
+
+    /* TOP: title + status in one row */
+    .top{
+      display:grid;
+      grid-template-columns:auto 1fr;
+      gap:10px;
+      align-items:center;
+      margin-bottom:12px;
+    }
+    @media (max-width: 520px){
+      .top{ grid-template-columns:1fr; }
+    }
+
+    .pill{
+      display:flex;align-items:center;gap:10px;
+      padding:10px 12px;border:1px solid var(--bd);border-radius:999px;
+      background:linear-gradient(180deg,var(--card2),var(--card));
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      user-select:none;
+      font-size:12px;
+      min-height:44px;
+    }
+    .pill b{font-size:13px;letter-spacing:.2px}
+    .dot{width:8px;height:8px;border-radius:50%;}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
+    .mut{color:var(--mut)}
+    #status{justify-content:flex-start}
+
+    .grid{
+      display:grid;gap:12px;
+      grid-template-columns: 1.05fr .95fr;
+    }
+    @media (max-width: 980px){ .grid{grid-template-columns:1fr;} }
+
+    .card{
+      border:1px solid var(--bd);
+      background:linear-gradient(180deg,var(--card2),var(--card));
+      border-radius:var(--r);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      overflow:hidden;
+    }
+    .hd{
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      padding:10px 12px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+    .hd .t{font-size:13px;font-weight:750;letter-spacing:.2px}
+    .bd{padding:10px 12px 12px}
+
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;}
+
+    textarea{
+      width:100%;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.24);
+      color:var(--tx);
+      outline:none;
+      padding:10px;
+      font-size:12.3px;
+      line-height:1.65;
+      resize:vertical;
+      min-height:310px;
+    }
+
+    /* Output box: wrap on mobile */
+    .outbox{
+      width:100%;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.24);
+      color:var(--tx);
+      outline:none;
+      padding:10px;
+      font-size:12.3px;
+      line-height:1.65;
+      resize:none;
+      min-height:210px;
+      white-space:pre-wrap;
+      word-break:break-all;
+      overflow:auto;
+    }
+
+    .btns{display:flex;gap:8px;flex-wrap:wrap}
+    button{
+      border:1px solid rgba(255,255,255,.16);
+      background: rgba(255,255,255,.08);
+      color:var(--tx);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      font-weight:800;
+      font-size:12px;
+      display:inline-flex;align-items:center;gap:7px;
+      transition:.15s transform ease, .15s border-color ease, .15s background ease;
+      user-select:none;
+    }
+    button:hover{transform: translateY(-1px); border-color: rgba(255,255,255,.32)}
+    button:active{transform: translateY(0px) scale(.99)}
+    .primary{
+      border-color: rgba(46,229,157,.42);
+      background: rgba(46,229,157,.14);
+    }
+    .danger{
+      border-color: rgba(255,92,122,.40);
+      background: rgba(255,92,122,.12);
+    }
+
+    /* Full-width copy button under output */
+    .copyFull{
+      width:100%;
+      justify-content:center;
+      margin-top:10px;
+    }
+
+    .tabs{display:flex;gap:6px;flex-wrap:wrap}
+    .tab{
+      padding:8px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      font-size:12px;color:var(--mut);
+      cursor:pointer;
+      user-select:none;
+    }
+    .tab.active{
+      color:var(--tx);
+      border-color: rgba(99,102,241,.55);
+      background: rgba(99,102,241,.16);
+    }
+
+    .out{display:none}
+    .out.active{display:block}
+
+    /* QR centered */
+    .qr{
+      margin-top:10px;
+      padding:12px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:12px;
+      background: rgba(0,0,0,.18);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:10px;
+    }
+    #qrcanvas, #qrimg{
+      width:280px;height:280px;
+      border-radius:12px;
+      background:#fff;
+      padding:10px;
+      display:block;
+    }
+    .mini{
+      font-size:11px;color:var(--mut);
+      word-break:break-all;
+      line-height:1.55;
+      text-align:center;
+      max-width:540px;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="pill"><b>JSON → VLESS / Sing-box / Clash</b></div>
+    <div class="pill" id="status"><span class="dot warn"></span><span class="mut" id="statusText">Paste JSON and click Convert.</span></div>
+  </div>
+
+  <div class="grid">
+    <!-- INPUT -->
+    <section class="card">
+      <div class="hd">
+        <div class="t">Input JSON</div>
+        <div class="btns">
+          <button class="primary" id="btnConvert">⚡ Convert</button>
+          <button id="btnSample">📎 Sample</button>
+          <button class="danger" id="btnClear">🧹 Clear</button>
+        </div>
+      </div>
+      <div class="bd">
+        <textarea id="input" class="mono" spellcheck="false" placeholder="Paste JSON here..."></textarea>
+      </div>
+    </section>
+
+    <!-- OUTPUT -->
+    <section class="card">
+      <div class="hd">
+        <div class="t">Output</div>
+        <div class="tabs">
+          <div class="tab active" data-tab="vless">VLESS</div>
+          <div class="tab" data-tab="singbox">Sing-box</div>
+          <div class="tab" data-tab="clash">Clash</div>
+        </div>
+      </div>
+
+      <div class="bd">
+        <!-- VLESS -->
+        <div class="out active" id="out-vless">
+          <textarea id="vlessText" class="outbox mono" readonly></textarea>
+          <button class="copyFull" data-copy="#vlessText">📋 Copy VLESS</button>
+
+          <div class="qr">
+            <canvas id="qrcanvas" width="280" height="280"></canvas>
+            <img id="qrimg" alt="QR" style="display:none"/>
+            <div class="mini" id="qrMini"></div>
+          </div>
+        </div>
+
+        <!-- SINGBOX -->
+        <div class="out" id="out-singbox">
+          <textarea id="singText" class="outbox mono" readonly></textarea>
+          <button class="copyFull" data-copy="#singText">📋 Copy Sing-box</button>
+        </div>
+
+        <!-- CLASH -->
+        <div class="out" id="out-clash">
+          <textarea id="clashText" class="outbox mono" readonly></textarea>
+          <button class="copyFull" data-copy="#clashText">📋 Copy Clash</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+/* ---------- PWA: register service worker (sw.js) ---------- */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(()=>{});
+  });
+}
+
+/* ---------- utils ---------- */
+const $ = (q, el=document) => el.querySelector(q);
+const toArray = (x)=> Array.isArray(x) ? x : (x==null ? [] : [x]);
+const first = (a)=> Array.isArray(a) ? a[0] : undefined;
+
+function setStatus(type, msg){
+  $("#status").innerHTML = `<span class="dot ${type}"></span><span class="mut" id="statusText">${escapeHtml(msg)}</span>`;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+async function copyText(text){
+  try{ await navigator.clipboard.writeText(text); return true; }
+  catch{
+    const ta=document.createElement("textarea");
+    ta.value=text; ta.style.position="fixed"; ta.style.left="-9999px";
+    document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); document.body.removeChild(ta); return true; }
+    catch{ document.body.removeChild(ta); return false; }
+  }
+}
+function encodeRFC3986(str){
+  return encodeURIComponent(str).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+/* ---------- extract vless profile ---------- */
+function extractVlessProfile(root){
+  const outbounds = toArray(root?.outbounds);
+  const vless = outbounds.find(o => (o?.protocol || o?.type) === "vless");
+  if(!vless) throw new Error("No outbound with protocol/type = vless.");
+
+  const vnext = first(vless?.settings?.vnext);
+  const user  = first(vnext?.users);
+
+  const server = vnext?.address;
+  const port   = Number(vnext?.port);
+  const uuid   = user?.id;
+
+  if(!server || !port || !uuid) throw new Error("Missing required fields: address/port/uuid.");
+
+  const stream   = vless?.streamSettings || {};
+  const network  = stream?.network || "tcp";
+  const security = stream?.security || "none";
+
+  const ws  = stream?.wsSettings || {};
+  const tls = stream?.tlsSettings || {};
+
+  const host = ws?.host || ws?.headers?.Host || ws?.headers?.host || "";
+  const path = ws?.path || "/";
+
+  const sni  = tls?.serverName || tls?.servername || "";
+  const fp   = tls?.fingerprint || "";
+  const alpn = Array.isArray(tls?.alpn) ? tls.alpn : [];
+  const allowInsecure = !!tls?.allowInsecure;
+
+  const remark = root?.remarks || vless?.tag || "VLESS";
+
+  return { remark, server:String(server), port, uuid:String(uuid), network, security,
+           ws:{host:String(host), path:String(path)},
+           tls:{sni:String(sni), fp:String(fp), alpn, allowInsecure} };
+}
+
+/* ---------- builders ---------- */
+function buildVlessURI(p){
+  const params = new URLSearchParams();
+  params.set("encryption", "none");
+
+  if(p.security && p.security !== "none") params.set("security", p.security);
+  if(p.network && p.network !== "tcp") params.set("type", p.network);
+
+  if(p.network === "ws"){
+    if(p.ws.host) params.set("host", p.ws.host);
+    if(p.ws.path) params.set("path", p.ws.path);
+  }
+  if(p.security === "tls"){
+    if(p.tls.sni) params.set("sni", p.tls.sni);
+    if(p.tls.fp) params.set("fp", p.tls.fp);
+    if(p.tls.allowInsecure) params.set("allowInsecure", "1");
+    if(p.tls.alpn?.length) params.set("alpn", p.tls.alpn.join(","));
+  }
+
+  return `vless://${p.uuid}@${p.server}:${p.port}?${params.toString()}#${encodeRFC3986(p.remark||"VLESS")}`;
+}
+
+function buildSingBox(p){
+  const outbound = {
+    type: "vless",
+    tag: "proxy",
+    server: p.server,
+    server_port: p.port,
+    uuid: p.uuid,
+    packet_encoding: "xudp"
+  };
+
+  if(p.security === "tls"){
+    outbound.tls = {
+      enabled: true,
+      server_name: p.tls.sni || p.ws.host || "",
+      insecure: !!p.tls.allowInsecure
+    };
+    if(p.tls.fp) outbound.tls.utls = { enabled: true, fingerprint: p.tls.fp };
+    if(p.tls.alpn?.length) outbound.tls.alpn = p.tls.alpn;
+  }else{
+    outbound.tls = { enabled:false };
+  }
+
+  if(p.network === "ws"){
+    outbound.transport = {
+      type: "ws",
+      path: p.ws.path || "/",
+      headers: p.ws.host ? { Host: p.ws.host } : {}
+    };
+  }
+
+  const cfg = {
+    log: { level: "warn" },
+    inbounds: [{ type: "mixed", tag: "mixed-in", listen: "127.0.0.1", listen_port: 10808, sniff: true }],
+    outbounds: [ outbound, { type:"direct", tag:"direct" }, { type:"block", tag:"block" }, { type:"dns", tag:"dns-out" } ],
+    route: { auto_detect_interface: true, rules: [{ protocol:"dns", outbound:"dns-out" }], final: "proxy" },
+    dns: { servers: [{ tag:"google", address:"8.8.8.8" }] }
+  };
+  return JSON.stringify(cfg, null, 2);
+}
+
+function escapeYaml(str){ return String(str).replace(/"/g,'\\"'); }
+function yamlScalar(v){
+  if(typeof v === "boolean") return v ? "true" : "false";
+  if(typeof v === "number") return String(v);
+  if(v === null) return "null";
+  const s = String(v);
+  if(/[#:>{}\[\],&*?|\-<>=!%@\\]/.test(s) || /\s/.test(s)) return `"${escapeYaml(s)}"`;
+  return s;
+}
+function renderYamlItem(obj){
+  const out=[];
+  out.push(`  - name: "${escapeYaml(obj.name)}"`);
+  for(const k of Object.keys(obj)){
+    if(k==="name") continue;
+    const v=obj[k];
+    if(v===undefined) continue;
+
+    if(Array.isArray(v)){
+      out.push(`    ${k}:`);
+      for(const it of v) out.push(`      - ${yamlScalar(it)}`);
+      continue;
+    }
+    if(v && typeof v === "object"){
+      out.push(`    ${k}:`);
+      for(const kk of Object.keys(v)){
+        const vv=v[kk];
+        if(vv && typeof vv==="object" && !Array.isArray(vv)){
+          out.push(`      ${kk}:`);
+          for(const kkk of Object.keys(vv)){
+            out.push(`        ${kkk}: ${yamlScalar(vv[kkk])}`);
+          }
+        }else{
+          out.push(`      ${kk}: ${yamlScalar(vv)}`);
+        }
+      }
+      continue;
+    }
+    out.push(`    ${k}: ${yamlScalar(v)}`);
+  }
+  return out.join("\n");
+}
+function buildClash(p){
+  const proxy = {
+    name: p.remark || "VLESS",
+    type: "vless",
+    server: p.server,
+    port: p.port,
+    uuid: p.uuid,
+    udp: true,
+    tls: (p.security === "tls")
+  };
+
+  if(p.security === "tls"){
+    if(p.tls.sni) proxy.servername = p.tls.sni;
+    if(p.tls.allowInsecure) proxy["skip-cert-verify"] = true;
+    if(p.tls.fp) proxy.fingerprint = p.tls.fp;
+    if(p.tls.alpn?.length) proxy.alpn = p.tls.alpn;
+  }
+  if(p.network === "ws"){
+    proxy.network = "ws";
+    proxy["ws-opts"] = {
+      path: p.ws.path || "/",
+      headers: p.ws.host ? { Host: p.ws.host } : {}
+    };
+  }
+
+  const name = proxy.name;
+  return [
+    "port: 7890",
+    "socks-port: 7891",
+    "allow-lan: true",
+    "mode: rule",
+    "log-level: info",
+    "ipv6: false",
+    "",
+    "proxies:",
+    renderYamlItem(proxy),
+    "",
+    "proxy-groups:",
+    `  - name: "PROXY"`,
+    "    type: select",
+    "    proxies:",
+    `      - "${escapeYaml(name)}"`,
+    "      - DIRECT",
+    "",
+    "rules:",
+    "  - MATCH,PROXY"
+  ].join("\n");
+}
+
+/* ---------- QR rendering (reliable online fallback) ---------- */
+function drawQR(text){
+  const canvas = $("#qrcanvas");
+  const img = $("#qrimg");
+  const ctx = canvas.getContext("2d");
+
+  // Reset
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  img.style.display="none";
+  canvas.style.display="block";
+  $("#qrMini").textContent = "";
+
+  if(!text) return;
+
+  const online = `https://api.qrserver.com/v1/create-qr-code/?size=520x520&data=${encodeURIComponent(text)}`;
+
+  // Always show online QR for correctness (especially long VLESS links)
+  canvas.style.display="none";
+  img.style.display="block";
+  img.src = online;
+
+  $("#qrMini").textContent = text.length>220 ? (text.slice(0,220)+"…") : text;
+}
+
+/* ---------- actions ---------- */
+const sampleJSON = `{
+  "remarks": "Sample - VLESS",
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          { "address": "example.com", "port": 443, "users": [ { "id": "00000000-0000-0000-0000-000000000000", "encryption": "none" } ] }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": { "host": "example.com", "path": "/?ed=2048" },
+        "security": "tls",
+        "tlsSettings": { "serverName": "example.com", "fingerprint": "chrome", "alpn": ["http/1.1"], "allowInsecure": false }
+      }
+    }
+  ]
+}`;
+
+function convert(){
+  const raw=$("#input").value.trim();
+  if(!raw){ setStatus("warn","Paste JSON and click Convert."); return; }
+  let root;
+  try{ root=JSON.parse(raw); }
+  catch{ setStatus("bad","Invalid JSON."); return; }
+
+  try{
+    const p=extractVlessProfile(root);
+
+    const vless=buildVlessURI(p);
+    $("#vlessText").value=vless;
+    drawQR(vless);
+
+    $("#singText").value=buildSingBox(p);
+    $("#clashText").value=buildClash(p);
+
+    setStatus("ok", `Converted: ${p.server}:${p.port} (${p.network}/${p.security})`);
+  }catch(e){
+    $("#vlessText").value="";
+    $("#singText").value="";
+    $("#clashText").value="";
+    drawQR("");
+    setStatus("bad", e?.message || "Conversion error.");
+  }
+}
+
+$("#btnConvert").addEventListener("click", convert);
+$("#btnSample").addEventListener("click", ()=>{
+  $("#input").value=sampleJSON;
+  setStatus("warn","Sample inserted. Click Convert.");
+});
+$("#btnClear").addEventListener("click", ()=>{
+  $("#input").value="";
+  $("#vlessText").value="";
+  $("#singText").value="";
+  $("#clashText").value="";
+  drawQR("");
+  setStatus("warn","Cleared.");
+});
+
+document.addEventListener("click", async (e)=>{
+  const btn=e.target.closest("[data-copy]");
+  if(!btn) return;
+  const sel=btn.getAttribute("data-copy");
+  const el=$(sel);
+  const text=(el?.value||"").trim();
+  if(!text){ setStatus("warn","Nothing to copy."); return; }
+  const ok=await copyText(text);
+  setStatus(ok?"ok":"bad", ok ? "Copied." : "Copy failed.");
+});
+
+document.querySelectorAll(".tab").forEach(t=>{
+  t.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+    t.classList.add("active");
+    const key=t.getAttribute("data-tab");
+    document.querySelectorAll(".out").forEach(o=>o.classList.remove("active"));
+    $("#out-"+key).classList.add("active");
+  });
+});
+
+let typingTimer=null;
+$("#input").addEventListener("input", ()=>{
+  if(typingTimer) clearTimeout(typingTimer);
+  typingTimer=setTimeout(()=> setStatus("warn","Input changed. Click Convert."), 250);
+});
+
+setStatus("warn","Paste JSON and click Convert.");
+drawQR("");
+</script>
+</body>
+</html>
