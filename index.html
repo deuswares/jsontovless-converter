@@ -5,15 +5,10 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>JSON → VLESS / Sing-box / Clash</title>
 
-  <!-- PWA (for GitHub Pages): keep these files next to index.html
-       - manifest.json
-       - sw.js
-       - icons/icon-192.png
-       - icons/icon-512.png
-  -->
+  <!-- PWA -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#0b1020">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
@@ -45,7 +40,6 @@
     }
     .wrap{max-width:1100px;margin:0 auto;}
 
-    /* TOP: title + status in one row */
     .top{
       display:grid;
       grid-template-columns:auto 1fr;
@@ -114,7 +108,6 @@
       min-height:310px;
     }
 
-    /* Output box: wrap on mobile */
     .outbox{
       width:100%;
       border-radius:12px;
@@ -157,7 +150,6 @@
       background: rgba(255,92,122,.12);
     }
 
-    /* Full-width copy button under output */
     .copyFull{
       width:100%;
       justify-content:center;
@@ -182,7 +174,6 @@
     .out{display:none}
     .out.active{display:block}
 
-    /* QR centered */
     .qr{
       margin-top:10px;
       padding:12px;
@@ -219,7 +210,6 @@
   </div>
 
   <div class="grid">
-    <!-- INPUT -->
     <section class="card">
       <div class="hd">
         <div class="t">Input JSON</div>
@@ -234,7 +224,6 @@
       </div>
     </section>
 
-    <!-- OUTPUT -->
     <section class="card">
       <div class="hd">
         <div class="t">Output</div>
@@ -246,7 +235,6 @@
       </div>
 
       <div class="bd">
-        <!-- VLESS -->
         <div class="out active" id="out-vless">
           <textarea id="vlessText" class="outbox mono" readonly></textarea>
           <button class="copyFull" data-copy="#vlessText">📋 Copy VLESS</button>
@@ -257,13 +245,11 @@
           </div>
         </div>
 
-        <!-- SINGBOX -->
         <div class="out" id="out-singbox">
           <textarea id="singText" class="outbox mono" readonly></textarea>
           <button class="copyFull" data-copy="#singText">📋 Copy Sing-box</button>
         </div>
 
-        <!-- CLASH -->
         <div class="out" id="out-clash">
           <textarea id="clashText" class="outbox mono" readonly></textarea>
           <button class="copyFull" data-copy="#clashText">📋 Copy Clash</button>
@@ -274,7 +260,7 @@
 </div>
 
 <script>
-/* ---------- PWA: register service worker (sw.js) ---------- */
+/* PWA */
 try{
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -283,7 +269,7 @@ try{
   }
 }catch(_){}
 
-/* ---------- utils ---------- */
+/* utils */
 const $ = (q, el=document) => el.querySelector(q);
 const toArray = (x)=> Array.isArray(x) ? x : (x==null ? [] : [x]);
 const first = (a)=> Array.isArray(a) ? a[0] : undefined;
@@ -310,7 +296,7 @@ function encodeRFC3986(str){
   return encodeURIComponent(str).replace(/[!'()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase());
 }
 
-/* ---------- extract vless profile ---------- */
+/* extract vless profile */
 function extractVlessProfile(root){
   const outbounds = toArray(root?.outbounds);
   const vless = outbounds.find(o => (o?.protocol || o?.type) === "vless");
@@ -347,7 +333,7 @@ function extractVlessProfile(root){
            tls:{sni:String(sni), fp:String(fp), alpn, allowInsecure} };
 }
 
-/* ---------- builders ---------- */
+/* builders */
 function buildVlessURI(p){
   const params = new URLSearchParams();
   params.set("encryption", "none");
@@ -499,7 +485,7 @@ function buildClash(p){
   ].join("\n");
 }
 
-/* ---------- QR (works for long strings) ---------- */
+/* QR: long links supported (online generator) */
 function drawQR(text){
   const img = $("#qrimg");
   const mini = $("#qrMini");
@@ -507,18 +493,14 @@ function drawQR(text){
 
   if(!text){
     img.removeAttribute("src");
-    img.style.background = "#fff";
     mini.textContent = "";
     return;
   }
-
-  // Reliable remote QR generator (HTTPS, GitHub Pages friendly)
-  const url = "https://api.qrserver.com/v1/create-qr-code/?size=520x520&data=" + encodeURIComponent(text);
-  img.src = url;
+  img.src = "https://api.qrserver.com/v1/create-qr-code/?size=520x520&data=" + encodeURIComponent(text);
   mini.textContent = (text.length > 220) ? (text.slice(0,220) + "…") : text;
 }
 
-/* ---------- actions ---------- */
+/* actions */
 const sampleJSON = `{
   "remarks": "Sample - VLESS",
   "outbounds": [
@@ -540,10 +522,7 @@ const sampleJSON = `{
 }`;
 
 function convert(){
-  const input = $("#input");
-  if(!input) return;
-
-  const raw = input.value.trim();
+  const raw = $("#input").value.trim();
   if(!raw){ setStatus("warn","Paste JSON and click Convert."); return; }
 
   let root;
@@ -552,8 +531,8 @@ function convert(){
 
   try{
     const p = extractVlessProfile(root);
-
     const vless = buildVlessURI(p);
+
     $("#vlessText").value = vless;
     drawQR(vless);
 
@@ -562,22 +541,20 @@ function convert(){
 
     setStatus("ok", `Converted: ${p.server}:${p.port} (${p.network}/${p.security})`);
   }catch(e){
-    $("#vlessText").value = "";
-    $("#singText").value = "";
-    $("#clashText").value = "";
+    $("#vlessText").value="";
+    $("#singText").value="";
+    $("#clashText").value="";
     drawQR("");
     setStatus("bad", e?.message || "Conversion error.");
   }
 }
 
-function safeOn(el, ev, fn){ if(el) el.addEventListener(ev, fn); }
-
-safeOn($("#btnConvert"), "click", convert);
-safeOn($("#btnSample"), "click", ()=>{
+$("#btnConvert").addEventListener("click", convert);
+$("#btnSample").addEventListener("click", ()=>{
   $("#input").value = sampleJSON;
   setStatus("warn","Sample inserted. Click Convert.");
 });
-safeOn($("#btnClear"), "click", ()=>{
+$("#btnClear").addEventListener("click", ()=>{
   $("#input").value="";
   $("#vlessText").value="";
   $("#singText").value="";
@@ -589,27 +566,25 @@ safeOn($("#btnClear"), "click", ()=>{
 document.addEventListener("click", async (e)=>{
   const btn = e.target.closest("[data-copy]");
   if(!btn) return;
-  const sel = btn.getAttribute("data-copy");
-  const el = $(sel);
+  const el = $(btn.getAttribute("data-copy"));
   const text = (el?.value || "").trim();
   if(!text){ setStatus("warn","Nothing to copy."); return; }
   const ok = await copyText(text);
-  setStatus(ok?"ok":"bad", ok ? "Copied." : "Copy failed.");
+  setStatus(ok ? "ok" : "bad", ok ? "Copied." : "Copy failed.");
 });
 
 document.querySelectorAll(".tab").forEach(t=>{
   t.addEventListener("click", ()=>{
     document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
     t.classList.add("active");
-    const key=t.getAttribute("data-tab");
+    const key = t.getAttribute("data-tab");
     document.querySelectorAll(".out").forEach(o=>o.classList.remove("active"));
-    const target = $("#out-"+key);
-    if(target) target.classList.add("active");
+    $("#out-"+key).classList.add("active");
   });
 });
 
 let typingTimer=null;
-safeOn($("#input"), "input", ()=>{
+$("#input").addEventListener("input", ()=>{
   if(typingTimer) clearTimeout(typingTimer);
   typingTimer=setTimeout(()=> setStatus("warn","Input changed. Click Convert."), 250);
 });
